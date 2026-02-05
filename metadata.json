@@ -1,0 +1,7 @@
+{
+  "name": "Mahapurush Packers and Movers",
+  "description": "A production-quality website for Mahapurush Packers and Movers, providing reliable relocation services in Ratnagiri and across India.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { MessageSquare, Send, X, Bot, User, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Loader2 } from 'lucide-react';
 
 const AIAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,6 +11,9 @@ const AIAssistant: React.FC = () => {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Ref to persist the chat session across re-renders
+  const chatSessionRef = useRef<any>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -27,21 +30,34 @@ const AIAssistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: userMsg,
-        config: {
-          systemInstruction: `You are an expert moving consultant for 'Mahapurush Packers and Movers' located in Ratnagiri, Maharashtra. 
-          Provide helpful, safe, and professional advice about packing, moving fragile items, relocation checklists, and vehicle transport. 
-          Keep answers concise and friendly. If they ask about pricing, tell them to visit our Contact page for a custom quote.`,
-        },
-      });
+      // Initialize the AI client and Chat session if it doesn't exist
+      if (!chatSessionRef.current) {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        chatSessionRef.current = ai.chats.create({
+          model: 'gemini-3-flash-preview',
+          config: {
+            systemInstruction: `You are an expert moving consultant for 'Mahapurush Packers and Movers' located in Ratnagiri, Maharashtra. 
+            Provide helpful, safe, and professional advice about packing, moving fragile items, relocation checklists, and vehicle transport. 
+            Keep answers concise and friendly. If they ask about pricing, tell them to visit our Contact page for a custom quote.
+            Our address is: House No. B/1714, Rasalwadi, Near Bus Stop, Nachane Road, Shanti Nagar, Ratnagiri.
+            Our focus is on damage-free shifting and customer trust.`,
+          },
+        });
+      }
 
-      const botText = response.text || "I'm sorry, I couldn't process that. Please try again or call us directly.";
+      // Send message using the chat session
+      const result = await chatSessionRef.current.sendMessage({ message: userMsg });
+      
+      const botText = result.text || "I'm sorry, I couldn't process that. Please try again or call us directly.";
       setMessages(prev => [...prev, { role: 'bot', text: botText }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'bot', text: "I'm currently resting. Please call our support for immediate assistance!" }]);
+      console.error("AI Assistant Error:", error);
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        text: "I'm having a bit of trouble connecting to my moving database. Please feel free to call us directly for immediate help!" 
+      }]);
+      // Reset chat session on error to allow a fresh start
+      chatSessionRef.current = null;
     } finally {
       setIsLoading(false);
     }
@@ -62,7 +78,11 @@ const AIAssistant: React.FC = () => {
                 <p className="text-[10px] text-cta uppercase tracking-widest mt-1 font-extrabold">Expert Help</p>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="hover:bg-white/10 p-1 rounded-full transition-colors">
+            <button 
+              onClick={() => setIsOpen(false)} 
+              className="hover:bg-white/10 p-1 rounded-full transition-colors"
+              aria-label="Close assistant"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -71,7 +91,11 @@ const AIAssistant: React.FC = () => {
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-brandGray/30 no-scrollbar">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm font-medium ${m.role === 'user' ? 'bg-primary-500 text-white rounded-tr-none' : 'bg-white text-textMain rounded-tl-none border border-brandGray'}`}>
+                <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm font-medium ${
+                  m.role === 'user' 
+                    ? 'bg-primary-500 text-white rounded-tr-none' 
+                    : 'bg-white text-textMain rounded-tl-none border border-brandGray'
+                }`}>
                   {m.text}
                 </div>
               </div>
@@ -93,14 +117,16 @@ const AIAssistant: React.FC = () => {
                 type="text" 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 placeholder="Ask about packing tips..."
                 className="flex-1 bg-brandGray border-brandGray rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-cta focus:outline-none font-medium"
+                disabled={isLoading}
               />
               <button 
                 onClick={handleSend}
-                disabled={isLoading}
+                disabled={isLoading || !input.trim()}
                 className="bg-cta text-primary-900 p-2 rounded-xl hover:bg-cta-hover transition-colors disabled:opacity-50 shadow-md"
+                aria-label="Send message"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -112,6 +138,7 @@ const AIAssistant: React.FC = () => {
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="bg-primary-500 text-cta p-4 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all animate-bounce-slow border-2 border-white"
+        aria-label={isOpen ? "Close Assistant" : "Open Assistant"}
       >
         {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
       </button>
